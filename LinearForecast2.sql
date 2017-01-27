@@ -1,5 +1,5 @@
 --Declare @HistoryEndDate Date = DATEADD(DD,-1,[dbo].[fn_GetReportDate]());
-Declare @NumDayHistory int = 14;
+Declare @NumDayHistory int = 30;
 Declare @NumDayForecast int = 126;
 
 Declare @HistoryEndDate Date = DATEADD(DD,-1,cast('2017-01-21' as Date));
@@ -30,8 +30,39 @@ Insert into #DateSeries
 Select * From gen
 Option (maxrecursion 10000)
 
--- Get 14 days History Usage Data across all region to train Linear Model 
+-- Join [dbo].[StorageUsageCPUStats] with [dbo].[AzureClusters] to get only live clusters and Portal used Region
+Create table #StorageUsageCPUStats
+(
+   FileDate Datetime,
+   [Date] Datetime,
+   Region Nvarchar(max),
+   Tenant Varchar(255),
+   Cluster Varchar(255),
+   StorageType Varchar(255),
+   CPUUtilization Varchar(255),
+   ACUUsed Float,
+   ACUTotal Float,
+   GeoSetup Nvarchar(20)
+);
 
+Insert into #StorageUsageCPUStats 
+Select FileDate
+	  ,[Date]
+      ,az.[RegionCode] AS Region
+	  ,st.Tenant
+      ,st.[Cluster]
+      ,[StorageType]
+      ,[CPUUtilization]
+      ,[ACUUsed]
+      ,[ACUTotal]
+	  ,[GeoSetup]
+From [dbo].[StorageUsageCPUStats] st
+INNER JOIN [dbo].[AzureClusters] az
+ON st.[Cluster] = az.[Cluster]
+WHERE az.ClusterLIVEDateSource = 'Actual' AND az.IsIntentSellable = 'Sellable'
+
+
+-- Get 14 days History Usage Data across all region to train Linear Model 
 Create table #HistoryUsage
 (
    [Date] Date,
@@ -47,7 +78,7 @@ From
            Region, 
 	       Sum(ACUUsed) as Usage, 
 	       Sum(ACUTotal) as Capacity
-    From [dbo].[StorageUsageCPUStats]  
+    From #StorageUsageCPUStats  
     Where StorageType = 'Standard' and 
           GeoSetup <> 'secondary' 
     Group by Cast(FileDate as date), Region) AggregatedUsage
@@ -256,6 +287,7 @@ on d.Region = l.Region
 --Select * From #DateSeriesForecast
 --Select * From #DateSeriesForecastWithRegion
 
+Drop table #StorageUsageCPUStats;
 Drop table #HistoryUsage;
 Drop table #DateSeries;
 Drop table #DataSeriesWithRegion;
@@ -264,3 +296,5 @@ Drop table #UsageSeriesWithNullFilled;
 Drop table #LinearModelParams;
 Drop table #DateSeriesForecast;
 Drop table #DateSeriesForecastWithRegion;
+
+-----
