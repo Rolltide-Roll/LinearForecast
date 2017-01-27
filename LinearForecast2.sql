@@ -1,8 +1,8 @@
---Declare @HistoryEndDate Date = DATEADD(DD,-1,[dbo].[fn_GetReportDate]());
 Declare @NumDayHistory int = 30;
 Declare @NumDayForecast int = 126;
 
-Declare @HistoryEndDate Date = DATEADD(DD,-1,cast('2017-01-21' as Date));
+Declare @HistoryEndDate Date = DATEADD(DD,-1,[dbo].[fn_GetReportDate]());
+--Declare @HistoryEndDate Date = DATEADD(DD,-1,cast('2017-01-21' as Date));
 Declare @HistoryStartDate Date = DATEADD(DD, 1 - (@NumDayHistory), @HistoryEndDate);
 Declare @ForecastStartDate Date = DATEADD(DD, 1, @HistoryEndDate);
 Declare @ForecastEndDate Date = DATEADD(DD, @NumDayForecast, @HistoryEndDate);
@@ -57,9 +57,9 @@ Select FileDate
       ,[ACUTotal]
 	  ,[GeoSetup]
 From [dbo].[StorageUsageCPUStats] st
-INNER JOIN [dbo].[AzureClusters] az
-ON st.[Cluster] = az.[Cluster]
-WHERE az.ClusterLIVEDateSource = 'Actual' AND az.IsIntentSellable = 'Sellable'
+Inner join [dbo].[AzureClusters] az
+On st.[Cluster] = az.[Cluster]
+Where az.ClusterLIVEDateSource = 'Actual' AND az.IsIntentSellable = 'Sellable'
 
 
 -- Get 14 days History Usage Data across all region to train Linear Model 
@@ -86,14 +86,14 @@ Where AggregatedUsage.[Date] between @HistoryStartDate and @HistoryEndDate
 Order by AggregatedUsage.[Date] 
 
 -- Generate crossjoin of distinct Region in to Series
-Create table #DataSeriesWithRegion
+Create table #DateSeriesWithRegion
 (
    [Date] Date,
    [RowIndex] int,
    [Region] Varchar(300)
 );
 
-Insert into #DataSeriesWithRegion
+Insert into #DateSeriesWithRegion
 Select * from #DateSeries d
 cross join
 (Select distinct Region from #HistoryUsage) r
@@ -112,7 +112,7 @@ Create table #UsageSeries
 Insert into #UsageSeries
 Select dsr.[Date], dsr.RowIndex, dsr.Region, hu.Usage, hu.Capacity  
 From 
-   #DataSeriesWithRegion dsr 
+   #DateSeriesWithRegion dsr 
 left outer join  
 	 #HistoryUsage hu 
 On dsr.[Date] = hu.[Date] and dsr.[Region] = hu.[Region]	   
@@ -299,17 +299,17 @@ order by x.Region, x.ForecastDate
 ----------------------------------------------------------
 --Select * From #HistoryUsage Order by Region, Date
 --Select * From #DateSeries Order by Date
---Select * From #DataSeriesWithRegion Order by Region, Date
+--Select * From #DateSeriesWithRegion Order by Region, Date
 --Select * From #UsageSeries Order by Region, Date
 --Select * From #UsageSeriesWithNullFilled Order by Region, Date
 --Select * From #LinearModelParams Order by Region
 --Select * From #DateSeriesForecast
 --Select * From #DateSeriesForecastWithRegion
 
+Drop table #DateSeries;
 Drop table #StorageUsageCPUStats;
 Drop table #HistoryUsage;
-Drop table #DateSeries;
-Drop table #DataSeriesWithRegion;
+Drop table #DateSeriesWithRegion;
 Drop table #UsageSeries;
 Drop table #UsageSeriesWithNullFilled;
 Drop table #LinearModelParams;
