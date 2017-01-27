@@ -262,19 +262,38 @@ Select * from #DateSeriesForecast d
 cross join
 (Select distinct Region from #HistoryUsage) r
 
--- Generate the ForecastResult
-Select 
+-- Generate the ForecastResult, the Geo value for Region is from HotRegionReport
+Select x.SnapshotDate,
+       y.Geo, 
+       x.Region,
+	   x.ClusterType,
+	   x.ResourceUnit,
+	   x.ForecastDate,
+	   x.ForecastValue
+From 
+
+(Select 
        [dbo].[fn_GetReportDate]() as SnapshotDate,
 	   d.Region as Region,
-	   'CPU' as ClusterType,
-	   'Cores' as ResourceUnit,
+	   'STORAGE' as ClusterType,
+	   'CPU' as ResourceUnit,
        d.[Date] as [ForecastDate],
 	   cast((RowIndex * b + a) as float) as ForecastValue
-From 
+ From 
     #DateSeriesForecastWithRegion d
-Left outer join
+ Left outer join
     #LinearModelParams l
-on d.Region = l.Region
+ on d.Region = l.Region) x
+
+left outer join
+
+(Select Geo, Region 
+ From rpt.HotRegionReport
+ Group by Geo, Region) y 
+
+on x.Region = y.Region
+
+order by x.Region, x.ForecastDate
 
 
 ----------------------------------------------------------
@@ -296,5 +315,3 @@ Drop table #UsageSeriesWithNullFilled;
 Drop table #LinearModelParams;
 Drop table #DateSeriesForecast;
 Drop table #DateSeriesForecastWithRegion;
-
------
