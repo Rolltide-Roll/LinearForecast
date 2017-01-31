@@ -74,16 +74,20 @@ Create table #HistoryUsage
 Insert into #HistoryUsage
 Select * 
 From 
-   (Select Cast(FileDate as date) as [Date], 
-           Region, 
-	       Sum(ACUUsed) as Usage, 
-	       Sum(ACUTotal) as Capacity
-    From #StorageUsageCPUStats  
-    Where StorageType = 'Standard' and 
-          GeoSetup <> 'secondary' 
-    Group by Cast(FileDate as date), Region) AggregatedUsage
-Where AggregatedUsage.[Date] between @HistoryStartDate and @HistoryEndDate
-Order by AggregatedUsage.[Date] 
+    (Select Cast(AggregatedUsage.FileDate as date) as [Date], 
+            AggregatedUsage.Region, 
+	        Avg(AggregatedUsage.Usage) as Usage, 
+	        Avg(AggregatedUsage.Capacity) as Capacity
+     From
+          (Select FileDate, 
+                  Region, 
+	              Sum(ACUUsed) as Usage, 
+	              Sum(ACUTotal) as Capacity
+           From #StorageUsageCPUStats
+           Where StorageType = 'Standard' and GeoSetup <> 'Secondary' 
+           Group by FileDate, Region) AggregatedUsage
+     Group by Cast(FileDate as date), Region ) DailyAverageUsage
+Where DailyAverageUsage.[Date] between @HistoryStartDate and @HistoryEndDate
 
 -- Generate crossjoin of distinct Region in to Series
 Create table #DateSeriesWithRegion
@@ -273,11 +277,11 @@ Select x.SnapshotDate,
 From 
 
 (Select 
-       [dbo].[fn_GetReportDate]() as SnapshotDate,
+       DateAdd(dd, 1, @HistoryEndDate) as SnapshotDate,
 	   d.Region as Region,
 	   'STORAGE' as ClusterType,
 	   'CPU' as ResourceUnit,
-       d.[Date] as [ForecastDate],
+       cast(d.[Date] as Date) as [ForecastDate],
 	   cast((RowIndex * b + a) as float) as ForecastValue
  From 
     #DateSeriesForecastWithRegion d
@@ -315,3 +319,5 @@ Drop table #UsageSeriesWithNullFilled;
 Drop table #LinearModelParams;
 Drop table #DateSeriesForecast;
 Drop table #DateSeriesForecastWithRegion;
+
+
